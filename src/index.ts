@@ -64,16 +64,24 @@ export const onTeaShopCreate = functions.firestore
                 console.log(error);
             });
     });
-export const parseTeaShopData = functions.https.onRequest(async (req, res) => {
+export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
+    //Total: 212
+    const fetchCount = 10;
+    const index = 220; //Change this
+
     const parser = require('node-html-parser');
     const rp = require('request-promise');
     const mapUrlPrefix = "https://www.google.com.tw/maps/place/";
     const milkShopUrl = "https://www.milkshoptea.com/store_detail.php?uID=22";
 
     await rp((milkShopUrl)).then(async (html: string) => {
+        console.log("currentIndex:" + index);
         const p = parser.parse(html);
         const allData: HTMLElement[] = p.querySelectorAll(".store_box");
-        for (let i = 0; i < allData.length; i++) {
+        for (let i = index; i < allData.length; i++) {
+            if (i > index + fetchCount - 1) {
+                break;
+            }
             const element = allData[i];
             let branchName;
             let phone;
@@ -109,14 +117,10 @@ export const parseTeaShopData = functions.https.onRequest(async (req, res) => {
                     phone = li.rawText;
                 }
             }
-            if (i < 0) {
-                console.log("\nBranch:" + branchName + "\nCity:" + city + "\nDistrict" + district + "\nAddress:" + address);
-            }
+
             let lat: string = "";
             let lng: string = "";
-            if (i > 3) {
-                continue;
-            }
+
             const new_rp = require('request-promise');
             await new_rp(mapUrlPrefix + encodeURIComponent(originalAddress)).then((data: string) => {
                 const position = parseGeoPosition(data, originalAddress);
