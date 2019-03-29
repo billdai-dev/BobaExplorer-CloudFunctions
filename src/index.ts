@@ -40,20 +40,6 @@ export const onTeaShopCreate = functions.firestore
             city = result[0];
             district = result[1];
             address = result[2];
-            // if (address.includes(`市`) && address.includes(`區`)) {
-            //     cityIndex = address.indexOf(`市`);
-            //     districtIndex = address.indexOf(`區`, cityIndex);
-            // }
-            // else {
-            //     cityIndex = address.indexOf(`縣`);
-            //     const districtIndexArr: number[] = [address.indexOf(`鄉`), address.indexOf(`鎮`), address.indexOf(`市`)];
-            //     districtIndexArr.sort();
-            //     const last = districtIndexArr.pop();
-            //     districtIndex = last === undefined ? -1 : last;
-            // }
-            // city = address.substring(0, cityIndex + 1);
-            // district = address.substring(cityIndex + 1, districtIndex + 1);
-            // address = address.substring(districtIndex + 1);
         }
         return snapshot.ref.set({
             t: admin.firestore.FieldValue.delete(), g: admin.firestore.FieldValue.delete(),
@@ -71,7 +57,6 @@ export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
 
     const parser = require('node-html-parser');
     const rp = require('request-promise');
-    const mapUrlPrefix = "https://www.google.com.tw/maps/place/";
     const milkShopUrl = "https://www.milkshoptea.com/store_detail.php?uID=22";
 
     await rp((milkShopUrl)).then(async (html: string) => {
@@ -121,17 +106,11 @@ export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
             let lat: string = "";
             let lng: string = "";
 
-            const new_rp = require('request-promise');
-            await new_rp(mapUrlPrefix + encodeURIComponent(originalAddress)).then((data: string) => {
-                const position = parseGeoPosition(data, originalAddress);
-                if (position === null || position.length !== 2) {
-                    return;
-                }
-                lat = position[0];
-                lng = position[1];
-
-                console.log("Latitude:" + lat + "\nLongitude:" + lng);
-            }).catch((err: any) => { console.log(err); });
+            const pos = await parsePositionFromGmap(originalAddress);
+            if (pos !== null && pos.length === 2) {
+                lat = pos[0];
+                lng = pos[1];
+            }
 
             if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
                 continue;
@@ -149,28 +128,6 @@ export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
         }
     });
     res.status(200).send("Success");
-
-    //Return [latitude, longitude]
-    function parseGeoPosition(data: string, originalAddress: string): string[] | null {
-        const startIndex = data.indexOf(originalAddress);
-        if (startIndex < 0) {
-            return null;
-        }
-        const leftBracketPos = data.indexOf("[", startIndex);
-        const rightBracketPos = data.indexOf("]", leftBracketPos);
-        const str = data.substring(leftBracketPos + 1, rightBracketPos);
-        const split = str.split(",");
-        const parsedPosition: string[] = [];
-        for (const element of split) {
-            if (isNumberOnly(element)) {
-                parsedPosition.push(element);
-            }
-            if (parsedPosition.length === 2) {
-                break;
-            }
-        }
-        return parsedPosition;
-    }
 });
 
 //Return [city, district, address]
@@ -200,6 +157,40 @@ function parseAddress(address: any): string[] {
     const district: string = address.substring(cityIndex + 1, districtIndex + 1);
     const newAddress: string = address.substring(districtIndex + 1);
     return [city, district, newAddress];
+}
+
+async function parsePositionFromGmap(address: string): Promise<string[]> {
+    const mapUrlPrefix = "https://www.google.com.tw/maps/place/";
+    const rp = require('request-promise');
+
+    return rp(mapUrlPrefix + encodeURIComponent(address)).then((data: string) => {
+        const position = parseGeoPosition(data, address);
+        console.log("Position:" + position);
+        return position === null || position.length !== 2 ? [] : position;
+
+    }).catch((err: any) => { console.log(err); });
+
+    //Return [latitude, longitude]
+    function parseGeoPosition(data: string, originalAddress: string): string[] | null {
+        const startIndex = data.indexOf(originalAddress);
+        if (startIndex < 0) {
+            return null;
+        }
+        const leftBracketPos = data.indexOf("[", startIndex);
+        const rightBracketPos = data.indexOf("]", leftBracketPos);
+        const str = data.substring(leftBracketPos + 1, rightBracketPos);
+        const split = str.split(",");
+        const parsedPosition: string[] = [];
+        for (const element of split) {
+            if (isNumberOnly(element)) {
+                parsedPosition.push(element);
+            }
+            if (parsedPosition.length === 2) {
+                break;
+            }
+        }
+        return parsedPosition;
+    }
 }
 
 function containsNumber(str: string) {
