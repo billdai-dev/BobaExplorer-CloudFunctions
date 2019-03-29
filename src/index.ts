@@ -50,22 +50,107 @@ export const onTeaShopCreate = functions.firestore
                 console.log(error);
             });
     });
-export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
-    //Total: 212
-    const fetchCount = 10;
-    const index = 220; //Change this
+// export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
+//     //Total: 212
+//     const fetchCount = 10;
+//     const index = 220; //Change this
+
+//     const parser = require('node-html-parser');
+//     const rp = require('request-promise');
+//     const milkShopUrl = "https://www.milkshoptea.com/store_detail.php?uID=22";
+
+//     await rp((milkShopUrl)).then(async (html: string) => {
+//         console.log("currentIndex:" + index);
+//         const p = parser.parse(html);
+//         const allData: HTMLElement[] = p.querySelectorAll(".store_box");
+//         for (let i = index; i < allData.length; i++) {
+//             if (i > index + fetchCount - 1) {
+//                 break;
+//             }
+//             const element = allData[i];
+//             let branchName;
+//             let phone;
+//             let city;
+//             let district;
+//             let originalAddress: string = "";
+//             let address;
+//             const shopName = "迷客夏";
+//             const tagH3 = element.querySelector("h3");
+//             if (tagH3 !== null) {
+//                 tagH3.childNodes.forEach(e => {
+//                     if (e instanceof parse.TextNode) {
+//                         branchName = e.rawText;
+//                     }
+//                 });
+//             }
+//             const tagP = element.querySelector("p");
+//             if (tagP !== null) {
+//                 tagP.childNodes.forEach(e => {
+//                     if (e instanceof parse.TextNode) {
+//                         originalAddress = e.rawText.replace(" ", "");
+//                         const addressInfo: string[] = parseAddress(originalAddress);
+//                         city = addressInfo[0];
+//                         district = addressInfo[1];
+//                         address = addressInfo[2];
+//                     }
+//                 });
+//             }
+//             const tagLi = element.querySelectorAll("li");
+//             if (tagLi !== null && tagLi.length === 2) {
+//                 const li = tagLi[1];
+//                 if (li instanceof parse.Node) {
+//                     phone = li.rawText;
+//                 }
+//             }
+
+//             let lat: string = "";
+//             let lng: string = "";
+
+//             const pos = await parsePositionFromGmap(originalAddress);
+//             if (pos !== null && pos.length === 2) {
+//                 lat = pos[0];
+//                 lng = pos[1];
+//             }
+
+//             if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
+//                 continue;
+//             }
+//             await firestore.collection("/tea_shops").add({
+//                 shopName: shopName,
+//                 branchName: branchName,
+//                 city: city,
+//                 district: district,
+//                 address: address,
+//                 phone: phone,
+//                 t: lat,
+//                 g: lng
+//             });
+//         }
+//     });
+//     res.status(200).send("Success");
+// });
+
+//Return [city, district, address]
+
+export const parse50LanData = functions.https.onRequest(async (req, res) => {
+    //Total: ?
+    // const fetchCount = 10;
+    //const index = 220; //Change this
 
     const parser = require('node-html-parser');
     const rp = require('request-promise');
-    const milkShopUrl = "https://www.milkshoptea.com/store_detail.php?uID=22";
+    const milkShopUrl = "https://twcoupon.com/brandshop-50%E5%B5%90-%E9%9B%BB%E8%A9%B1-%E5%9C%B0%E5%9D%80.html";
 
     await rp((milkShopUrl)).then(async (html: string) => {
-        console.log("currentIndex:" + index);
+        // console.log("currentIndex:" + index);
         const p = parser.parse(html);
-        const allData: HTMLElement[] = p.querySelectorAll(".store_box");
-        for (let i = index; i < allData.length; i++) {
-            if (i > index + fetchCount - 1) {
-                break;
+        const allData = p.querySelector(".right").querySelectorAll("li");
+        for (let i = 0; i < allData.length; i++) {
+            // if (i > index + fetchCount - 1) {
+            //     break;
+            // }
+            if (i < 0) {
+                console.log("");
             }
             const element = allData[i];
             let branchName;
@@ -74,8 +159,16 @@ export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
             let district;
             let originalAddress: string = "";
             let address;
-            const shopName = "迷客夏";
-            const tagH3 = element.querySelector("h3");
+            const shopName = "50嵐";
+
+            const allSpanData = element.querySelectorAll("span");
+            if (allSpanData.length !== 3) {
+                continue;
+            }
+            //let text = allSpanData[0].querySelector("a");
+            
+
+            const tagH3 = element.querySelector("li");
             if (tagH3 !== null) {
                 tagH3.childNodes.forEach(e => {
                     if (e instanceof parse.TextNode) {
@@ -130,7 +223,6 @@ export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
     res.status(200).send("Success");
 });
 
-//Return [city, district, address]
 function parseAddress(address: any): string[] {
     let cityIndex: number;
     let districtIndex: number;
