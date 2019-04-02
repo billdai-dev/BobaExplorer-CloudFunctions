@@ -12,7 +12,7 @@ import * as admin from 'firebase-admin';
 // });
 //firebase.initializeApp(functions.config().firebase);
 admin.initializeApp();
-//const firestore = admin.firestore();
+const firestore = admin.firestore();
 
 export const onTeaShopCreate = functions.firestore
     .document("/tea_shops/{shopId}")
@@ -55,6 +55,25 @@ export const onTeaShopCreate = functions.firestore
                 console.log(error);
             });
     });
+export const deleteShopData = functions.https.onRequest(async (req, res) => {
+    const shop = req.query["shop"];
+
+    if (shop === undefined || shop === null) {
+        res.status(400).send(`Need query parameter: shop`);
+        return;
+    }
+    const shopCollection = firestore.collection("/tea_shops");
+    const query = shopCollection.where("shopName", "==", shop);
+    const deletedAmount = await query.get().then(async (p) => {
+        const count = p.size;
+        for (const snapshot of p.docs) {
+            await snapshot.ref.delete();
+        }
+        return count;
+    });
+    res.status(200).send(deletedAmount + ` ` + shop + `deleted!`);
+});
+
 // export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
 //     //Total: 212
 //     const fetchCount = 10;

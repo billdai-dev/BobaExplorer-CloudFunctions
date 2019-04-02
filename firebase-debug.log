@@ -1,0 +1,14 @@
+[debug] [2019-04-02T08:11:49.242Z] ----------------------------------------------------------------------
+[debug] [2019-04-02T08:11:49.245Z] Command:       /usr/local/bin/node /usr/local/bin/firebase deploy
+[debug] [2019-04-02T08:11:49.246Z] CLI Version:   6.5.0
+[debug] [2019-04-02T08:11:49.246Z] Platform:      darwin
+[debug] [2019-04-02T08:11:49.246Z] Node Version:  v10.15.3
+[debug] [2019-04-02T08:11:49.251Z] Time:          Tue Apr 02 2019 16:11:49 GMT+0800 (GMT+08:00)
+[debug] [2019-04-02T08:11:49.251Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2019-04-02T08:11:49.269Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2019-04-02T08:11:49.270Z] > authorizing via signed-in user
+[debug] [2019-04-02T08:11:49.270Z] [iam] checking project bobaexplorer-c4179 for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2019-04-02T08:11:49.273Z] >>> HTTP REQUEST POST https://cloudresourcemanager.googleapis.com/v1/projects/bobaexplorer-c4179:testIamPermissions  
+
+[debug] [2019-04-02T08:11:50.342Z] <<< HTTP RESPONSE 200
