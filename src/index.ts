@@ -2,7 +2,7 @@
 import * as functions from 'firebase-functions';
 import * as geohash from 'ngeohash';
 import * as admin from 'firebase-admin';
-//import { HTMLElement, Node } from 'node-html-parser';
+import { HTMLElement, Node, TextNode } from 'node-html-parser';
 
 // Start writing Firebase Functions
 // https://firebase.google.com/docs/functions/typescript
@@ -31,9 +31,9 @@ export const onTeaShopCreate = functions.firestore
         }
         const hash = geohash.encode(lat, lng);
 
-        let branchName = data.branchName;
-        if (branchName !== undefined && branchName.includes("店")) {
-            branchName = branchName.replace("店", "");
+        let branchName: string = data.branchName;
+        if (branchName !== undefined && branchName.charAt(branchName.length - 1) === "店") {
+            branchName = branchName.substring(0, branchName.length - 1);
         }
 
         let city = data.city;
@@ -74,85 +74,88 @@ export const deleteShopData = functions.https.onRequest(async (req, res) => {
     res.status(200).send(deletedAmount + ` ` + shop + `deleted!`);
 });
 
-// export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
-//     //Total: 212
-//     const fetchCount = 10;
-//     const index = 220; //Change this
+export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
+    //Total: 212
+    const fetchCount = 20;
+    const index = 200; //Change this
 
-//     const parser = require('node-html-parser');
-//     const rp = require('request-promise');
-//     const milkShopUrl = "https://www.milkshoptea.com/store_detail.php?uID=22";
+    const parser = require('node-html-parser');
+    const rp = require('request-promise');
+    const milkShopUrl = "https://www.milkshoptea.com/store_detail.php?uID=22";
 
-//     await rp((milkShopUrl)).then(async (html: string) => {
-//         console.log("currentIndex:" + index);
-//         const p = parser.parse(html);
-//         const allData: HTMLElement[] = p.querySelectorAll(".store_box");
-//         for (let i = index; i < allData.length; i++) {
-//             if (i > index + fetchCount - 1) {
-//                 break;
-//             }
-//             const element = allData[i];
-//             let branchName;
-//             let phone;
-//             let city;
-//             let district;
-//             let originalAddress: string = "";
-//             let address;
-//             const shopName = "迷客夏";
-//             const tagH3 = element.querySelector("h3");
-//             if (tagH3 !== null) {
-//                 tagH3.childNodes.forEach(e => {
-//                     if (e instanceof parse.TextNode) {
-//                         branchName = e.rawText;
-//                     }
-//                 });
-//             }
-//             const tagP = element.querySelector("p");
-//             if (tagP !== null) {
-//                 tagP.childNodes.forEach(e => {
-//                     if (e instanceof parse.TextNode) {
-//                         originalAddress = e.rawText.replace(" ", "");
-//                         const addressInfo: string[] = parseAddress(originalAddress);
-//                         city = addressInfo[0];
-//                         district = addressInfo[1];
-//                         address = addressInfo[2];
-//                     }
-//                 });
-//             }
-//             const tagLi = element.querySelectorAll("li");
-//             if (tagLi !== null && tagLi.length === 2) {
-//                 const li = tagLi[1];
-//                 if (li instanceof parse.Node) {
-//                     phone = li.rawText;
-//                 }
-//             }
+    await rp((milkShopUrl)).then(async (html: string) => {
+        console.log("currentIndex:" + index);
+        const p = parser.parse(html);
+        const allData: HTMLElement[] = p.querySelectorAll(".store_box");
+        for (let i = index; i < allData.length; i++) {
+            if (i > index + fetchCount - 1) {
+                break;
+            }
+            const element = allData[i];
+            let branchName;
+            let phone;
+            let city;
+            let district;
+            let originalAddress: string = "";
+            let address;
+            const shopName = "迷客夏";
+            const tagH3 = element.querySelector("h3");
+            if (tagH3 !== null) {
+                tagH3.childNodes.forEach(e => {
+                    if (e instanceof TextNode) {
+                        branchName = e.rawText;
+                    }
+                });
+            }
+            const tagP = element.querySelector("p");
+            if (tagP !== null) {
+                tagP.childNodes.forEach(e => {
+                    if (e instanceof TextNode) {
+                        originalAddress = e.rawText.replace(" ", "");
+                        const addressInfo: string[] = parseAddress(originalAddress);
+                        city = addressInfo[0];
+                        district = addressInfo[1];
+                        address = addressInfo[2];
+                    }
+                });
+            }
+            const tagLi = element.querySelectorAll("li");
+            if (tagLi !== null && tagLi.length === 2) {
+                const li = tagLi[1];
+                if (li instanceof Node) {
+                    phone = li.rawText;
+                }
+            }
 
-//             let lat: string = "";
-//             let lng: string = "";
+            let lat: string = "";
+            let lng: string = "";
 
-//             const pos = await parsePositionFromGmap(originalAddress);
-//             if (pos !== null && pos.length === 2) {
-//                 lat = pos[0];
-//                 lng = pos[1];
-//             }
+            const pos = await parsePositionFromGmap(originalAddress);
+            if (pos !== null && pos.length === 2) {
+                lat = pos[0];
+                lng = pos[1];
+            }
 
-//             if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
-//                 continue;
-//             }
-//             await firestore.collection("/tea_shops").add({
-//                 shopName: shopName,
-//                 branchName: branchName,
-//                 city: city,
-//                 district: district,
-//                 address: address,
-//                 phone: phone,
-//                 t: lat,
-//                 g: lng
-//             });
-//         }
-//     });
-//     res.status(200).send("Success");
-// });
+            if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
+                console.log("branch: " + branchName + " 無法獲得");
+                continue;
+            }
+
+            console.log(branchName + ` Lat:` + lat + `, Lng:` + lng);
+            await firestore.collection("/tea_shops").add({
+                shopName: shopName,
+                branchName: branchName,
+                city: city,
+                district: district,
+                address: address,
+                phone: phone,
+                t: lat,
+                g: lng
+            });
+        }
+    });
+    res.status(200).send("Success");
+});
 
 
 // export const parse50LanData = functions.https.onRequest(async (req, res) => {
@@ -354,44 +357,44 @@ function parseAddress(address: any): string[] {
     return [city, district, newAddress];
 }
 
-// async function parsePositionFromGmap(address: string): Promise<string[]> {
-//     const mapUrlPrefix = "https://www.google.com.tw/maps/place/";
-//     const rp = require('request-promise');
+async function parsePositionFromGmap(address: string): Promise<string[]> {
+    const mapUrlPrefix = "https://www.google.com.tw/maps/place/";
+    const rp = require('request-promise');
 
-//     return rp(mapUrlPrefix + encodeURIComponent(address)).then((data: string) => {
-//         const position = parseGeoPosition(data, address);
-//         // console.log("Position:" + position);
-//         return position === null || position.length !== 2 ? [] : position;
+    return rp(mapUrlPrefix + encodeURIComponent(address)).then((data: string) => {
+        const position = parseGeoPosition(data, address);
+        // console.log("Position:" + position);
+        return position === null || position.length !== 2 ? [] : position;
 
-//     }).catch((err: any) => { console.log(err); });
+    }).catch((err: any) => { console.log(err); });
 
-//     //Return [latitude, longitude]
-//     function parseGeoPosition(data: string, originalAddress: string): string[] | null {
-//         const startIndex = data.indexOf(originalAddress);
-//         if (startIndex < 0) {
-//             return null;
-//         }
-//         const leftBracketPos = data.indexOf("[", startIndex);
-//         const rightBracketPos = data.indexOf("]", leftBracketPos);
-//         const str = data.substring(leftBracketPos + 1, rightBracketPos);
-//         const split = str.split(",");
-//         const parsedPosition: string[] = [];
-//         for (const element of split) {
-//             if (isNumberOnly(element)) {
-//                 parsedPosition.push(element);
-//             }
-//             if (parsedPosition.length === 2) {
-//                 break;
-//             }
-//         }
-//         return parsedPosition;
-//     }
-// }
+    //Return [latitude, longitude]
+    function parseGeoPosition(data: string, originalAddress: string): string[] | null {
+        const startIndex = data.indexOf(originalAddress);
+        if (startIndex < 0) {
+            return null;
+        }
+        const leftBracketPos = data.indexOf("[", startIndex);
+        const rightBracketPos = data.indexOf("]", leftBracketPos);
+        const str = data.substring(leftBracketPos + 1, rightBracketPos);
+        const split = str.split(",");
+        const parsedPosition: string[] = [];
+        for (const element of split) {
+            if (isNumberOnly(element)) {
+                parsedPosition.push(element);
+            }
+            if (parsedPosition.length === 2) {
+                break;
+            }
+        }
+        return parsedPosition;
+    }
+}
 
 function containsNumber(str: string) {
     return /\d/.test(str);
 }
 
-// function isNumberOnly(str: string) {
-//     return /^\d+(\.\d+)?$/.test(str);
-// }
+function isNumberOnly(str: string) {
+    return /^\d+(\.\d+)?$/.test(str);
+}
