@@ -2,7 +2,7 @@
 import * as functions from 'firebase-functions';
 import * as geohash from 'ngeohash';
 import * as admin from 'firebase-admin';
-import { HTMLElement } from 'node-html-parser';
+//import { HTMLElement } from 'node-html-parser';
 
 // Start writing Firebase Functions
 // https://firebase.google.com/docs/functions/typescript
@@ -75,70 +75,94 @@ export const deleteShopData = functions.https.onRequest(async (req, res) => {
     res.status(200).send(deletedAmount + ` ` + shop + `deleted!`);
 });
 
-export const parseTpteaData = functions.https.onRequest(async (req, res) => {
-    const tpteaData = ``; //Copy contents in <tbody> manually and paste here
-
-    const parser = require('node-html-parser');
-    const p = parser.parse(tpteaData);
-    const allData: HTMLElement[] = p.querySelectorAll("tr");
-    console.log("Total:" + allData.length);
-    for (let i = 0; i < allData.length; i++) {
-        const element = allData[i];
-        let branchName;
-        let phone;
-        let city;
-        let district;
-        let originalAddress: string = "";
-        let address;
-        let lat: string = "";
-        let lng: string = "";
-        const shopName = "茶湯會";
-
-        const allTdData = element.querySelectorAll("td");
-        let td = allTdData[0];
-        if (td !== null) {
-            branchName = td.querySelector("a").rawText.replace("店", "");
-        }
-        td = allTdData[1];
-        if (td !== null) {
-            phone = td.querySelector("a").rawText;
-        }
-        td = allTdData[2];
-        if (td !== null) {
-            const tagA = td.querySelector("a");
-            const url = tagA.attributes["href"];
-            const split = url.split("=");
-            const position = split[split.length - 1].split(",");
-            lat = position[0].replace(" ", "");
-            lng = position[1].replace(" ","");
-            originalAddress = td.rawText;
-            const splitAddr = parseAddress(originalAddress);
-            city = splitAddr[0];
-            district = splitAddr[1];
-            address = splitAddr[2];
-        }
-        if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
-            console.log("branch: " + branchName + " 無法獲得");
-            continue;
-        }
-        if (i < 0) {
-            console.log(shopName + "," + branchName + "," + phone + "," + city + "," + district + "," + address);
-        }
-
-        console.log("第" + i + "個: " + branchName + ` Lat:` + lat + `, Lng:` + lng);
-        await firestore.collection("/tea_shops").add({
-            shopName: shopName,
-            branchName: branchName,
-            city: city,
-            district: district,
-            address: address,
-            phone: phone,
-            t: lat,
-            g: lng
-        });
+export const updateShopField = functions.https.onRequest(async (req, res) => {
+    const shop = req.query["shop"];
+    const key = req.query["key"];
+    let value = req.query["value"];
+    if (isNumberOnly(value)) {
+        value = Number(value);
     }
-    res.status(200).send("Success");
+
+    if (shop === undefined || shop === null || key === undefined || key === null) {
+        res.status(400).send(`Need both query parameter: shop, key`);
+        return;
+    }
+    const shopCollection = firestore.collection("/tea_shops");
+    const query = shopCollection.where("shopName", "==", shop);
+    const updatedAmount = await query.get().then(async (p) => {
+        const count = p.size;
+        for (const snapshot of p.docs) {
+            await snapshot.ref.set({ [key]: value }, { merge: true });
+        }
+        return count;
+    });
+    res.status(200).send(updatedAmount + ` ` + shop + `updated!`);
 });
+
+// export const parseTpteaData = functions.https.onRequest(async (req, res) => {
+//     const tpteaData = ``; //Copy contents in <tbody> manually and paste here
+
+//     const parser = require('node-html-parser');
+//     const p = parser.parse(tpteaData);
+//     const allData: HTMLElement[] = p.querySelectorAll("tr");
+//     console.log("Total:" + allData.length);
+//     for (let i = 0; i < allData.length; i++) {
+//         const element = allData[i];
+//         let branchName;
+//         let phone;
+//         let city;
+//         let district;
+//         let originalAddress: string = "";
+//         let address;
+//         let lat: string = "";
+//         let lng: string = "";
+//         const shopName = "茶湯會";
+
+//         const allTdData = element.querySelectorAll("td");
+//         let td = allTdData[0];
+//         if (td !== null) {
+//             branchName = td.querySelector("a").rawText.replace("店", "");
+//         }
+//         td = allTdData[1];
+//         if (td !== null) {
+//             phone = td.querySelector("a").rawText;
+//         }
+//         td = allTdData[2];
+//         if (td !== null) {
+//             const tagA = td.querySelector("a");
+//             const url = tagA.attributes["href"];
+//             const split = url.split("=");
+//             const position = split[split.length - 1].split(",");
+//             lat = position[0].replace(" ", "");
+//             lng = position[1].replace(" ","");
+//             originalAddress = td.rawText;
+//             const splitAddr = parseAddress(originalAddress);
+//             city = splitAddr[0];
+//             district = splitAddr[1];
+//             address = splitAddr[2];
+//         }
+//         if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
+//             console.log("branch: " + branchName + " 無法獲得");
+//             continue;
+//         }
+//         if (i < 0) {
+//             console.log(shopName + "," + branchName + "," + phone + "," + city + "," + district + "," + address);
+//         }
+
+//         console.log("第" + i + "個: " + branchName + ` Lat:` + lat + `, Lng:` + lng);
+//         await firestore.collection("/tea_shops").add({
+//             shopName: shopName,
+//             branchName: branchName,
+//             city: city,
+//             district: district,
+//             address: address,
+//             phone: phone,
+//             t: lat,
+//             g: lng
+//         });
+//     }
+//     res.status(200).send("Success");
+// });
 
 // export const parseMilkshopData = functions.https.onRequest(async (req, res) => {
 //     //Total: 212
@@ -393,6 +417,7 @@ export const parseTpteaData = functions.https.onRequest(async (req, res) => {
 
 //     res.status(200).send("Success");
 // });
+
 
 
 
