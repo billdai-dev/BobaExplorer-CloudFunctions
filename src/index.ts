@@ -2,7 +2,7 @@
 import * as functions from 'firebase-functions';
 import * as geohash from 'ngeohash';
 import * as admin from 'firebase-admin';
-//import { HTMLElement } from 'node-html-parser';
+import { HTMLElement } from 'node-html-parser';
 
 // Start writing Firebase Functions
 // https://firebase.google.com/docs/functions/typescript
@@ -97,6 +97,87 @@ export const updateShopField = functions.https.onRequest(async (req, res) => {
         return count;
     });
     res.status(200).send(updatedAmount + ` ` + shop + `updated!`);
+});
+
+export const parseChingShinData = functions.https.onRequest(async (req, res) => {
+    //Total: 504
+    //     const fetchCount = 20;
+    //     const index = 500; //Iterate this
+
+    const parser = require('node-html-parser');
+    const rp = require('request-promise');
+    const chingShinShopUrl = "http://www.chingshin.tw/store.php?city=4&page=1"; //Change city and page index
+    await rp((chingShinShopUrl)).then(async (html: string) => {
+        const p = parser.parse(html);
+        const allData: HTMLElement[] = p.querySelector("#tab-4").querySelector(".row").querySelectorAll("div");
+        allData.pop();
+        console.log("Total:" + allData.length);
+        for (let i = 0; i < allData.length; i++) {
+            const element = allData[i];
+            let branchName;
+            let phone;
+            let city;
+            let district;
+            let originalAddress: string = "";
+            let address;
+            let lat: string = "";
+            let lng: string = "";
+            const shopName = "清心福全";
+
+            const h3Tag = element.querySelector("h3");
+            if (h3Tag !== null) {
+                const title = h3Tag.rawText;
+                branchName = title.substring(title.indexOf("「") + 1, title.indexOf("」")).replace("店", "");
+            }
+            const allPData = element.querySelectorAll("p");
+            let pData = allPData[0];
+            if (pData !== null) {
+                originalAddress = pData.rawText.trim();
+                const splitAddr = parseAddress(originalAddress);
+                city = splitAddr[0];
+                district = splitAddr[1];
+                address = splitAddr[2];
+            }
+            pData = allPData[1];
+            if (pData !== null) {
+                let text = pData.rawText
+                if(text.includes("（")){
+                    text = text.substring(0, text.indexOf("（")).trim();
+                }
+                phone = text;
+            }
+
+            const pos = await parsePositionFromGmap(originalAddress);
+            if (pos !== null && pos.length === 2) {
+                lat = pos[0];
+                lng = pos[1];
+            }
+
+            if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
+                console.log("branch: " + branchName + " 無法獲得");
+                continue;
+            }
+            // if (i < 0) {
+                console.log(shopName + "," + branchName + "," + phone + "," + city + "," + district + "," + address);
+            // }
+
+            console.log("第" + (i + 1) + "個: " + branchName + ` Lat:` + lat + `, Lng:` + lng);
+            await firestore.collection("/tea_shops").add({
+                shopName: shopName,
+                branchName: branchName,
+                city: city,
+                district: district,
+                address: address,
+                phone: phone,
+                t: lat,
+                g: lng
+            });
+        }
+    });
+
+
+
+    res.status(200).send("Success");
 });
 
 // export const parseTpteaData = functions.https.onRequest(async (req, res) => {
@@ -450,39 +531,39 @@ function parseAddress(address: any): string[] {
     return [city, district, newAddress];
 }
 
-// async function parsePositionFromGmap(address: string): Promise<string[]> {
-//     const mapUrlPrefix = "https://www.google.com.tw/maps/place/";
-//     const rp = require('request-promise');
+async function parsePositionFromGmap(address: string): Promise<string[]> {
+    const mapUrlPrefix = "https://www.google.com.tw/maps/place/";
+    const rp = require('request-promise');
 
-//     return rp(mapUrlPrefix + encodeURIComponent(address)).then((data: string) => {
-//         const position = parseGeoPosition(data, address);
-//         // console.log("Position:" + position);
-//         return position === null || position.length !== 2 ? [] : position;
+    return rp(mapUrlPrefix + encodeURIComponent(address)).then((data: string) => {
+        const position = parseGeoPosition(data, address);
+        // console.log("Position:" + position);
+        return position === null || position.length !== 2 ? [] : position;
 
-//     }).catch((err: any) => { console.log(err); });
+    }).catch((err: any) => { console.log(err); });
 
-//     //Return [latitude, longitude]
-//     function parseGeoPosition(data: string, originalAddress: string): string[] | null {
-//         const startIndex = data.indexOf(originalAddress);
-//         if (startIndex < 0) {
-//             return null;
-//         }
-//         const leftBracketPos = data.indexOf("[", startIndex);
-//         const rightBracketPos = data.indexOf("]", leftBracketPos);
-//         const str = data.substring(leftBracketPos + 1, rightBracketPos);
-//         const split = str.split(",");
-//         const parsedPosition: string[] = [];
-//         for (const element of split) {
-//             if (isNumberOnly(element)) {
-//                 parsedPosition.push(element);
-//             }
-//             if (parsedPosition.length === 2) {
-//                 break;
-//             }
-//         }
-//         return parsedPosition;
-//     }
-// }
+    //Return [latitude, longitude]
+    function parseGeoPosition(data: string, originalAddress: string): string[] | null {
+        const startIndex = data.indexOf(originalAddress);
+        if (startIndex < 0) {
+            return null;
+        }
+        const leftBracketPos = data.indexOf("[", startIndex);
+        const rightBracketPos = data.indexOf("]", leftBracketPos);
+        const str = data.substring(leftBracketPos + 1, rightBracketPos);
+        const split = str.split(",");
+        const parsedPosition: string[] = [];
+        for (const element of split) {
+            if (isNumberOnly(element)) {
+                parsedPosition.push(element);
+            }
+            if (parsedPosition.length === 2) {
+                break;
+            }
+        }
+        return parsedPosition;
+    }
+}
 
 function containsNumber(str: string) {
     return /\d/.test(str);
