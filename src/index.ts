@@ -231,165 +231,148 @@ export const parseShopGeocode = functions.https.onRequest(async (req, res) => {
     res.status(200).send(updatedAmount + ` ` + shop + `updated!`);
 });
 
-export const parseKebukeData = functions.https.onRequest(async (req, res) => {
+export const parseMrWishData = functions.https.onRequest(async (req, res) => {
+    const fetchCount = 20;
+    const index = req.query["index"];
     const parser = require('node-html-parser');
-    const html = `<tbody><tr>
-    <td align="center">小港<span>漢民店</span></td>
-    <td align="center">高雄市小港區漢民路626號<span class="spanco"><a href="tel:07-807-0680">07-807-0680</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="103"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/%E5%8F%AF%E4%B8%8D%E5%8F%AF%E7%86%9F%E6%88%90%E7%B4%85%E8%8C%B6%EF%BC%88%E5%B0%8F%E6%B8%AF%E6%BC%A2%E6%B0%91%E5%BA%97%EF%BC%89/@22.5668758,120.3582672,17z/data=!4m13!1m7!3m6!1s0x346e1cdbf0b643e9:0x6368c22ec16d74b4!2zODEy6auY6ZuE5biC5bCP5riv5Y2A5ryi5rCR6LevNjI26Jmf!3b1!8m2!3d22.5668758!4d120.3604559!3m4!1s0x346e1cdbf0b643e9:0x57064911e720ba!8m2!3d22.5668758!4d120.3604559?hl=zh-TW" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
+    const rp = require('request-promise');
+    const mrWishShopUrl = `http://www.mr-wish.com/shop_region.php?uID=1`;
+    await rp((mrWishShopUrl)).then(async (html: string) => {
+        const p = parser.parse(html);
+        const allData: HTMLElement[] = p.querySelector("#about05").querySelector(".shop_all").querySelectorAll(".COURSE");
+        console.log("Total:" + allData.length);
+        for (let i = index; i < allData.length; i++) {
+            if (i > index + fetchCount - 1) {
+                break;
+            }
+            const element = allData[i];
+            let branchName;
+            let phone;
+            let city;
+            let district;
+            let originalAddress: string = "";
+            let address;
+            let lat: string = "";
+            let lng: string = "";
+            const shopName = "Mr.Wish";
 
-  <tr>
-    <td align="center">鳳山<span>光遠店</span></td>
-    <td align="center">高雄市鳳山區光遠路280號<span class="spanco"><a href="tel:07-740-6892">07-740-6892</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="104"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/830%E9%AB%98%E9%9B%84%E5%B8%82%E9%B3%B3%E5%B1%B1%E5%8D%80%E5%85%89%E9%81%A0%E8%B7%AF280%E8%99%9F/@22.625686,120.3593323,17z/data=!3m1!4b1!4m5!3m4!1s0x346e1b3f4f8df57d:0x29d1b48273b8ebdd!8m2!3d22.625686!4d120.361521?hl=zh-TW" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
+            const h3Tag = element.querySelector("h3");
+            if (h3Tag !== null) {
+                branchName = h3Tag.rawText.replace("店", "").trim();
+            }
+            const divTag = element.querySelector("div");
+            const liTags = divTag.querySelector("ul").querySelectorAll("li");
+            let liTag = liTags[0];
+            if (liTag !== null) {
+                phone = liTag.rawText.trim();
+            }
+            liTag = liTags[1];
+            if (liTag !== null) {
+                originalAddress = liTag.rawText.trim();
+                const splitAddr = parseAddress(originalAddress);
+                city = splitAddr[0];
+                district = splitAddr[1];
+                address = splitAddr[2];
+            }
+            const pos = await geocodeAddress(`${city}${district}${address}`);
+            if (pos !== null && pos.length === 2) {
+                lat = pos[0];
+                lng = pos[1];
+            }
 
-  <tr>
-    <td align="center">高雄<span>熱河店</span></td>
-    <td align="center">高雄市三民區熱河一街343號<span class="spanco"><a href="tel:07-322-3365">07-322-3365</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="105"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/807%E9%AB%98%E9%9B%84%E5%B8%82%E4%B8%89%E6%B0%91%E5%8D%80%E7%86%B1%E6%B2%B3%E4%B8%80%E8%A1%97343%E8%99%9F/@22.643567,120.3046183,17z/data=!3m1!4b1!4m5!3m4!1s0x346e04f1bacbb957:0x771526a31e366aa9!8m2!3d22.643567!4d120.306807?hl=zh-TW" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
+            if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
+                console.log("branch: " + branchName + " 無法獲得");
+                continue;
+            }
+            // if (i < 0) {
+            console.log(shopName + "," + branchName + "," + phone + "," + city + "," + district + "," + address);
+            // }
 
-  <tr>
-    <td align="center">高雄<span>自立店</span></td>
-    <td align="center">高雄市新興區自立二路118號<span class="spanco"><a href="tel:07-285-2525">07-285-2525</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="106"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/800%E9%AB%98%E9%9B%84%E5%B8%82%E6%96%B0%E8%88%88%E5%8D%80%E8%87%AA%E7%AB%8B%E4%BA%8C%E8%B7%AF118%E8%99%9F/@22.6322502,120.2964746,17z/data=!3m1!4b1!4m5!3m4!1s0x346e0489f3825381:0x6abd0426dd33ab27!8m2!3d22.6322502!4d120.2986633?hl=zh-TW" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
-
-  <tr>
-    <td align="center">高雄<span>自強店</span></td>
-    <td align="center">高雄市前金區自強三路254號<span class="spanco"><a href="tel:07-221-2103">07-221-2103</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="107"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/801%E9%AB%98%E9%9B%84%E5%B8%82%E5%89%8D%E9%87%91%E5%8D%80%E8%87%AA%E5%BC%B7%E4%B8%89%E8%B7%AF254%E8%99%9F/@22.6322502,120.2964746,17z/data=!4m5!3m4!1s0x346e047e277127d7:0x67566ff0f0459843!8m2!3d22.6203462!4d120.2973905?hl=zh-TW" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
-
-  <tr>
-    <td align="center">高雄<span>文化店</span></td>
-    <td align="center">高雄市苓雅區林泉街94號<span class="spanco"><a href="tel:07-722-8532">07-722-8532</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="108"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/802%E9%AB%98%E9%9B%84%E5%B8%82%E8%8B%93%E9%9B%85%E5%8D%80%E6%9E%97%E6%B3%89%E8%A1%9794%E8%99%9F/@22.622683,120.3146653,17z/data=!3m1!4b1!4m5!3m4!1s0x346e0499c5645c17:0xefca84a9374912f3!8m2!3d22.622683!4d120.316854?hl=zh-TW" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
-
-  <tr>
-    <td align="center">高雄<span>大社店</span></td>
-    <td align="center">高雄市大社區中山路216-1號<span class="spanco"><a href="tel:07-353-5748">07-353-5748</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="109"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/815%E9%AB%98%E9%9B%84%E5%B8%82%E5%A4%A7%E7%A4%BE%E5%8D%80%E4%B8%AD%E5%B1%B1%E8%B7%AF216%E8%99%9F/@22.7318334,120.3456357,17z/data=!3m1!4b1!4m5!3m4!1s0x346e102ba2901f25:0xd9fe177e768cc8b2!8m2!3d22.7318334!4d120.3478244?hl=zh-TW" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
-
-  <tr>
-    <td align="center">高雄<span>文山店</span></td>
-    <td align="center">高雄市鳳山區濱山街31號<span class="spanco"><a href="tel:07-777-7948">07-777-7948</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="110"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/830%E9%AB%98%E9%9B%84%E5%B8%82%E9%B3%B3%E5%B1%B1%E5%8D%80%E6%BF%B1%E5%B1%B1%E8%A1%9731%E8%99%9F/@22.6457745,120.3488809,17z/data=!3m1!4b1!4m5!3m4!1s0x346e1b29a76e12f1:0xe36cbeba63ad0417!8m2!3d22.6457745!4d120.3510696?hl=zh-TW" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
-
-  <tr>
-    <td align="center">楠梓<span>德賢店</span></td>
-    <td align="center">高雄市楠梓區德賢路214號<span class="spanco"><a href="tel:07-366-0360">07-366-0360</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="111"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/811%E9%AB%98%E9%9B%84%E5%B8%82%E6%A5%A0%E6%A2%93%E5%8D%80%E5%BE%B7%E8%B3%A2%E8%B7%AF214%E8%99%9F/@22.7267137,120.304141,17z/data=!3m1!4b1!4m5!3m4!1s0x346e0fa376db2335:0x185aa0a1a2df0424!8m2!3d22.7267137!4d120.3063297?hl=zh-TW" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
-
-  <tr>
-    <td align="center">鳳山<span>五甲店</span></td>
-    <td align="center">高雄市鳳山區自強二路115號<span class="spanco"><a href="tel:07-831-9171">07-831-9171</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="112"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/830%E9%AB%98%E9%9B%84%E5%B8%82%E9%B3%B3%E5%B1%B1%E5%8D%80%E8%87%AA%E5%BC%B7%E4%BA%8C%E8%B7%AF115%E8%99%9F/@22.5959505,120.3251258,17z/data=!3m1!4b1!4m5!3m4!1s0x346e03446b62baf3:0x483dfd4cf1d573ac!8m2!3d22.5959505!4d120.3273145?hl=zh-TW" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
-
-  <tr>
-    <td align="center">左營<span>裕誠店</span></td>
-    <td align="center">高雄市左營區裕誠路239號<span class="spanco"><a href="tel:07-558-5353">07-558-5353</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="127"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/813%E9%AB%98%E9%9B%84%E5%B8%82%E5%B7%A6%E7%87%9F%E5%8D%80%E8%A3%95%E8%AA%A0%E8%B7%AF239%E8%99%9F/@22.664485,120.3074233,17z/data=!3m1!4b1!4m5!3m4!1s0x346e051b3013e1c3:0xe3b588d11cec8d6e!8m2!3d22.664485!4d120.309612" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
-
-  <tr>
-    <td align="center">前鎮<span>瑞隆店</span></td>
-    <td align="center">高雄市前鎮區瑞隆路352號<span class="spanco"><a href="tel:07-761-7879">07-761-7879</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="128"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com.tw/maps/place/806%E9%AB%98%E9%9B%84%E5%B8%82%E5%89%8D%E9%8E%AE%E5%8D%80%E7%91%9E%E9%9A%86%E8%B7%AF352%E8%99%9F/@22.6056414,120.3293102,17z/data=!3m1!4b1!4m5!3m4!1s0x346e0359e763edc7:0x4d2f50c242ce05e6!8m2!3d22.6056414!4d120.3314989" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
-
-  <tr>
-    <td align="center">岡山<span>維仁店</span></td>
-    <td align="center">高雄市岡山區維仁路85號<span class="spanco"><a href="tel:07-622-0377">07-622-0377</a></span></td>
-    <td align="center" valign="top"><i class="fas fa-info-circle modal_alert" data-store="129"></i></td>
-    <td align="center" valign="top"><a href="https://www.google.com/maps/place/820%E9%AB%98%E9%9B%84%E5%B8%82%E5%B2%A1%E5%B1%B1%E5%8D%80%E7%B6%AD%E4%BB%81%E8%B7%AF85%E8%99%9F/data=!4m2!3m1!1s0x346e0c2bdda19c81:0x52f3349eae92d802?ved=2ahUKEwi32JHbzYrhAhUPQLwKHewLD9sQ8gEwAHoECAAQAQ" target="_blank"><i class="fas fa-map-marker-alt"></i></a></td>
-  </tr>
-                  </tbody>`;
-    const p = parser.parse(html);
-    const allData: HTMLElement[] = p.querySelectorAll("tr");
-    console.log("Total:" + allData.length);
-    for (let i = 0; i < allData.length; i++) {
-        const element = allData[i];
-        let branchName;
-        let phone;
-        let city;
-        let district;
-        let originalAddress: string = "";
-        let address;
-        let lat: string = "";
-        let lng: string = "";
-        const shopName = "可不可熟成紅茶";
-
-        const tdTags = element.querySelectorAll("td");
-        let tdTag = tdTags[0];
-        if (tdTag !== null) {
-            //const spanTag = tdTag.querySelector("span");
-            branchName = tdTag.rawText.replace("店", "");
+            console.log("第" + (i + 1) + "個: " + branchName + ` Lat:` + lat + `, Lng:` + lng);
+            await firestore.collection("/tea_shops").add({
+                shopName: shopName,
+                branchName: branchName,
+                city: city,
+                district: district,
+                address: address,
+                phone: phone,
+                t: lat,
+                g: lng
+            });
         }
-        tdTag = tdTags[1];
-        if (tdTag !== null) {
-            const spanTag = tdTag.querySelector("span");
-            phone = spanTag.rawText;
-
-            originalAddress = tdTag.rawText.replace(phone, "");
-            const splitAddr = parseAddress(originalAddress);
-            city = splitAddr[0];
-            district = splitAddr[1];
-            address = splitAddr[2];
-
-
-        }
-        tdTag = tdTags[3];
-        if (tdTag !== null) {
-            const url = tdTag.querySelector("a").attributes["href"];
-            const capturedLatLng = url.substring(url.lastIndexOf("!3d") + 3,
-                url.includes("zh-TW") ? url.lastIndexOf("?") : url.length);
-            const latLng = capturedLatLng.split("!4d");
-            lat = latLng[0];
-            lng = latLng[1];
-        }
-
-        if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
-            console.log("branch: " + branchName + " 無法獲得");
-            continue;
-        }
-        // if (i < 0) {
-        console.log(shopName + "," + branchName + "," + phone + "," + city + "," + district + "," + address);
-        // }
-
-        console.log("第" + (i + 1) + "個: " + branchName + ` Lat:` + lat + `, Lng:` + lng);
-        await firestore.collection("/tea_shops").add({
-            shopName: shopName,
-            branchName: branchName,
-            city: city,
-            district: district,
-            address: address,
-            phone: phone,
-            t: lat,
-            g: lng
-        });
-    }
+    });
     res.status(200).send("Success");
 });
+
+// export const parseKebukeData = functions.https.onRequest(async (req, res) => {
+//     const parser = require('node-html-parser');
+//     const html = ``;
+//     const p = parser.parse(html);
+//     const allData: HTMLElement[] = p.querySelectorAll("tr");
+//     console.log("Total:" + allData.length);
+//     for (let i = 0; i < allData.length; i++) {
+//         const element = allData[i];
+//         let branchName;
+//         let phone;
+//         let city;
+//         let district;
+//         let originalAddress: string = "";
+//         let address;
+//         let lat: string = "";
+//         let lng: string = "";
+//         const shopName = "可不可熟成紅茶";
+
+//         const tdTags = element.querySelectorAll("td");
+//         let tdTag = tdTags[0];
+//         if (tdTag !== null) {
+//             //const spanTag = tdTag.querySelector("span");
+//             branchName = tdTag.rawText.replace("店", "");
+//         }
+//         tdTag = tdTags[1];
+//         if (tdTag !== null) {
+//             const spanTag = tdTag.querySelector("span");
+//             phone = spanTag.rawText;
+
+//             originalAddress = tdTag.rawText.replace(phone, "");
+//             const splitAddr = parseAddress(originalAddress);
+//             city = splitAddr[0];
+//             district = splitAddr[1];
+//             address = splitAddr[2];
+
+
+//         }
+//         tdTag = tdTags[3];
+//         if (tdTag !== null) {
+//             const url = tdTag.querySelector("a").attributes["href"];
+//             const capturedLatLng = url.substring(url.lastIndexOf("!3d") + 3,
+//                 url.includes("zh-TW") ? url.lastIndexOf("?") : url.length);
+//             const latLng = capturedLatLng.split("!4d");
+//             lat = latLng[0];
+//             lng = latLng[1];
+//         }
+
+//         if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
+//             console.log("branch: " + branchName + " 無法獲得");
+//             continue;
+//         }
+//         // if (i < 0) {
+//         console.log(shopName + "," + branchName + "," + phone + "," + city + "," + district + "," + address);
+//         // }
+
+//         console.log("第" + (i + 1) + "個: " + branchName + ` Lat:` + lat + `, Lng:` + lng);
+//         await firestore.collection("/tea_shops").add({
+//             shopName: shopName,
+//             branchName: branchName,
+//             city: city,
+//             district: district,
+//             address: address,
+//             phone: phone,
+//             t: lat,
+//             g: lng
+//         });
+//     }
+//     res.status(200).send("Success");
+// });
 
 // export const parseChingShinData = functions.https.onRequest(async (req, res) => {
 //     //Total: 504
@@ -873,7 +856,7 @@ async function geocodeAddress(address: string) {
             console.log(`Original address: ${address}`)
             console.log(`FormattedAddress: ${formattedAddress}`);
             console.log(`Both the same: ${isTheSame}`);
-            return isTheSame ? [location.lat.toString(), location.lng.toString()] : [];
+            return location !== null ? [location.lat.toString(), location.lng.toString()] : [];
         })
         .catch((err) => {
             console.log(err);
