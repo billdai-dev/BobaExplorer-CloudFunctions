@@ -231,15 +231,17 @@ export const parseShopGeocode = functions.https.onRequest(async (req, res) => {
     res.status(200).send(updatedAmount + ` ` + shop + `updated!`);
 });
 
-export const parseMrWishData = functions.https.onRequest(async (req, res) => {
+export const parseYiFangTeaData = functions.https.onRequest(async (req, res) => {
     const fetchCount = 20;
+    const uid = req.query["uid"]; //Should be 46(North), 47(Middle), 48(South), 49(East)
     const index = req.query["index"];
     const parser = require('node-html-parser');
     const rp = require('request-promise');
-    const mrWishShopUrl = `http://www.mr-wish.com/shop_region.php?uID=1`;
-    await rp((mrWishShopUrl)).then(async (html: string) => {
+    const yiFangTeaShopUrl = `http://www.yifangtea.com.tw/location.php?uID=${uid}`;
+    await rp((yiFangTeaShopUrl)).then(async (html: string) => {
         const p = parser.parse(html);
-        const allData: HTMLElement[] = p.querySelector("#about05").querySelector(".shop_all").querySelectorAll(".COURSE");
+        const allData: HTMLElement[] = p.querySelector("#intro").querySelector(".row").querySelector(".bg_2")
+            .querySelector(".container").querySelector(".col-md-12").querySelectorAll(".col-sm-6");
         console.log("Total:" + allData.length);
         for (let i = index; i < allData.length; i++) {
             if (i > index + fetchCount - 1) {
@@ -254,25 +256,25 @@ export const parseMrWishData = functions.https.onRequest(async (req, res) => {
             let address;
             let lat: string = "";
             let lng: string = "";
-            const shopName = "Mr.Wish";
+            const shopName = "一芳台灣水果茶";
 
-            const h3Tag = element.querySelector("h3");
+            const locationDivTag = element.querySelector(".location_1").querySelector(".col-md-7").querySelector(".location_2");
+            const h3Tag = locationDivTag.querySelector("h3");
             if (h3Tag !== null) {
                 branchName = h3Tag.rawText.replace("店", "").trim();
             }
-            const divTag = element.querySelector("div");
-            const liTags = divTag.querySelector("ul").querySelectorAll("li");
-            let liTag = liTags[0];
-            if (liTag !== null) {
-                phone = liTag.rawText.trim();
-            }
-            liTag = liTags[1];
+            const ulTags = locationDivTag.querySelectorAll("ul");
+            let liTag = ulTags[0].querySelector("li");
             if (liTag !== null) {
                 originalAddress = liTag.rawText.trim();
                 const splitAddr = parseAddress(originalAddress);
                 city = splitAddr[0];
                 district = splitAddr[1];
                 address = splitAddr[2];
+            }
+            liTag = ulTags[1].querySelector("li");
+            if (liTag !== null) {
+                phone = liTag.rawText.trim();                
             }
             const pos = await geocodeAddress(`${city}${district}${address}`);
             if (pos !== null && pos.length === 2) {
@@ -303,6 +305,79 @@ export const parseMrWishData = functions.https.onRequest(async (req, res) => {
     });
     res.status(200).send("Success");
 });
+
+// export const parseMrWishData = functions.https.onRequest(async (req, res) => {
+//     const fetchCount = 20;
+//     const index = req.query["index"];
+//     const parser = require('node-html-parser');
+//     const rp = require('request-promise');
+//     const mrWishShopUrl = `http://www.mr-wish.com/shop_region.php?uID=1`;
+//     await rp((mrWishShopUrl)).then(async (html: string) => {
+//         const p = parser.parse(html);
+//         const allData: HTMLElement[] = p.querySelector("#about05").querySelector(".shop_all").querySelectorAll(".COURSE");
+//         console.log("Total:" + allData.length);
+//         for (let i = index; i < allData.length; i++) {
+//             if (i > index + fetchCount - 1) {
+//                 break;
+//             }
+//             const element = allData[i];
+//             let branchName;
+//             let phone;
+//             let city;
+//             let district;
+//             let originalAddress: string = "";
+//             let address;
+//             let lat: string = "";
+//             let lng: string = "";
+//             const shopName = "Mr.Wish";
+
+//             const h3Tag = element.querySelector("h3");
+//             if (h3Tag !== null) {
+//                 branchName = h3Tag.rawText.replace("店", "").trim();
+//             }
+//             const divTag = element.querySelector("div");
+//             const liTags = divTag.querySelector("ul").querySelectorAll("li");
+//             let liTag = liTags[0];
+//             if (liTag !== null) {
+//                 phone = liTag.rawText.trim();
+//             }
+//             liTag = liTags[1];
+//             if (liTag !== null) {
+//                 originalAddress = liTag.rawText.trim();
+//                 const splitAddr = parseAddress(originalAddress);
+//                 city = splitAddr[0];
+//                 district = splitAddr[1];
+//                 address = splitAddr[2];
+//             }
+//             const pos = await geocodeAddress(`${city}${district}${address}`);
+//             if (pos !== null && pos.length === 2) {
+//                 lat = pos[0];
+//                 lng = pos[1];
+//             }
+
+//             if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
+//                 console.log("branch: " + branchName + " 無法獲得");
+//                 continue;
+//             }
+//             // if (i < 0) {
+//             console.log(shopName + "," + branchName + "," + phone + "," + city + "," + district + "," + address);
+//             // }
+
+//             console.log("第" + (i + 1) + "個: " + branchName + ` Lat:` + lat + `, Lng:` + lng);
+//             await firestore.collection("/tea_shops").add({
+//                 shopName: shopName,
+//                 branchName: branchName,
+//                 city: city,
+//                 district: district,
+//                 address: address,
+//                 phone: phone,
+//                 t: lat,
+//                 g: lng
+//             });
+//         }
+//     });
+//     res.status(200).send("Success");
+// });
 
 // export const parseKebukeData = functions.https.onRequest(async (req, res) => {
 //     const parser = require('node-html-parser');
