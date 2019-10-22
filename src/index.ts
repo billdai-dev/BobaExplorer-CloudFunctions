@@ -2,8 +2,8 @@
 import * as functions from 'firebase-functions';
 import * as geohash from 'ngeohash';
 import * as admin from 'firebase-admin';
-import { HTMLElement } from 'node-html-parser';
-import { DocumentData } from '@google-cloud/firestore';
+//import { HTMLElement } from 'node-html-parser';
+import { DocumentData, FieldValue } from '@google-cloud/firestore';
 import * as geocode from '@google/maps';
 
 // Start writing Firebase Functions
@@ -15,6 +15,32 @@ import * as geocode from '@google/maps';
 //firebase.initializeApp(functions.config().firebase);
 admin.initializeApp();
 const firestore = admin.firestore();
+
+exports.onNewUserCreated = functions.auth.user().onCreate((user) => {
+    return firestore
+        .collection("user")
+        .add({ id: user.uid, name: user.displayName, email: user.email, photoUrl: user.photoURL });
+});
+
+exports.onUserRemoved = functions.auth.user().onDelete(async (user) => {
+    await firestore
+        .collection("tea_shops")
+        .where("favoriteUid", "array-contains", user.uid)
+        .get()
+        .then((snapshots) => {
+            snapshots.forEach(async (doc) => {
+                await doc.ref.update({
+                    "favoriteUid": FieldValue.arrayRemove(user.uid)
+                })
+            })
+        });
+    return firestore
+        .collection("user").where("id", "==", user.uid)
+        .get()
+        .then((snapshots) => {
+            snapshots.forEach((doc) => doc.ref.delete())
+        });
+});
 
 export const onTeaShopCreate = functions.firestore
     .document("/tea_shops/{shopId}")
@@ -231,80 +257,166 @@ export const parseShopGeocode = functions.https.onRequest(async (req, res) => {
     res.status(200).send(updatedAmount + ` ` + shop + `updated!`);
 });
 
-export const parseYiFangTeaData = functions.https.onRequest(async (req, res) => {
-    const fetchCount = 20;
-    const uid = req.query["uid"]; //Should be 46(North), 47(Middle), 48(South), 49(East)
-    const index = req.query["index"];
+export const parseCocoData = functions.https.onRequest(async (req, res) => {
+    const fetchCount: number = 20;
+    const storeIdLimit: number = 462;
+    const storeId = req.query["id"];
+    let storeIdNumber: number = 0;
+    let id: number = 0;
+
+    if (isNumberOnly(storeId)) {
+        id = parseInt(storeId);
+        storeIdNumber = parseInt(storeId);
+    }
     const parser = require('node-html-parser');
     const rp = require('request-promise');
-    const yiFangTeaShopUrl = `http://www.yifangtea.com.tw/location.php?uID=${uid}`;
-    await rp((yiFangTeaShopUrl)).then(async (html: string) => {
-        const p = parser.parse(html);
-        const allData: HTMLElement[] = p.querySelector("#intro").querySelector(".row").querySelector(".bg_2")
-            .querySelector(".container").querySelector(".col-md-12").querySelectorAll(".col-sm-6");
-        console.log("Total:" + allData.length);
-        for (let i = index; i < allData.length; i++) {
-            if (i > index + fetchCount - 1) {
-                break;
-            }
-            const element = allData[i];
-            let branchName;
-            let phone;
-            let city;
-            let district;
-            let originalAddress: string = "";
-            let address;
-            let lat: string = "";
-            let lng: string = "";
-            const shopName = "一芳台灣水果茶";
-
-            const locationDivTag = element.querySelector(".location_1").querySelector(".col-md-7").querySelector(".location_2");
-            const h3Tag = locationDivTag.querySelector("h3");
-            if (h3Tag !== null) {
-                branchName = h3Tag.rawText.replace("店", "").trim();
-            }
-            const ulTags = locationDivTag.querySelectorAll("ul");
-            let liTag = ulTags[0].querySelector("li");
-            if (liTag !== null) {
-                originalAddress = liTag.rawText.trim();
-                const splitAddr = parseAddress(originalAddress);
-                city = splitAddr[0];
-                district = splitAddr[1];
-                address = splitAddr[2];
-            }
-            liTag = ulTags[1].querySelector("li");
-            if (liTag !== null) {
-                phone = liTag.rawText.trim();                
-            }
-            const pos = await geocodeAddress(`${city}${district}${address}`);
-            if (pos !== null && pos.length === 2) {
-                lat = pos[0];
-                lng = pos[1];
-            }
-
-            if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
-                console.log("branch: " + branchName + " 無法獲得");
-                continue;
-            }
-            // if (i < 0) {
-            console.log(shopName + "," + branchName + "," + phone + "," + city + "," + district + "," + address);
-            // }
-
-            console.log("第" + (i + 1) + "個: " + branchName + ` Lat:` + lat + `, Lng:` + lng);
-            await firestore.collection("/tea_shops").add({
-                shopName: shopName,
-                branchName: branchName,
-                city: city,
-                district: district,
-                address: address,
-                phone: phone,
-                t: lat,
-                g: lng
-            });
+    for (; id <= storeIdLimit; id++) {
+        if (id > storeIdNumber + fetchCount - 1) {
+            break;
         }
-    });
+        const cocoShopUrl = `http://www.coco-tea.com/store-locator/store/${id}`;
+        await rp((cocoShopUrl))
+            .catch((error: any) => { console.log(`第 ${id + 1} 個失敗`); })
+            .then(async (html: string) => {
+                const p = parser.parse(html);
+                let element = p.querySelector(".ret_cont.clearfix");
+                if (element === null || element === undefined) {
+                    return;
+                }
+                element = element.querySelector(".ret_left.col-sm-4.col-md-3.col-xs-12.row")
+                    .querySelector(".ccss.scrollbar_1.mCustomScrollbar._mCS_1")
+                    .querySelector("#mCSB_1").querySelector("#mCSB_1_container");
+
+                let branchName;
+                let phone;
+                let city;
+                let district;
+                let originalAddress: string = "";
+                let address;
+                let lat: string = "";
+                let lng: string = "";
+                const shopName = "CoCo都可";
+
+                const divTags = element.querySelectorAll("div");
+                let divTag = divTags[0];
+                if (divTag !== null) {
+                    branchName = divTag.rawText.trim();
+                }
+                divTag = divTags[2];
+                if (divTag !== null) {
+                    const liTags = divTag.querySelector("ul").querySelectorAll("li");
+                    phone = liTags[0].rawText.split("：")[1].replace(" ", "");
+                    originalAddress = liTags[1].rawText.split("：")[1].replace(" ", "");
+                    const splitAddr = parseAddress(originalAddress);
+                    city = splitAddr[0];
+                    district = splitAddr[1];
+                    address = splitAddr[2];
+                }
+
+                const pos = await geocodeAddress(`${city}${district}${address}`);
+                if (pos !== null && pos.length === 2) {
+                    lat = pos[0];
+                    lng = pos[1];
+                }
+
+                if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
+                    console.log("branch: " + branchName + " 無法獲得");
+                    return;
+                }
+                // if (i < 0) {
+                console.log(shopName + "," + branchName + "," + phone + "," + city + "," + district + "," + address);
+                // }
+
+                console.log("第" + (id + 1) + "個: " + branchName + ` Lat:` + lat + `, Lng:` + lng);
+                await firestore.collection("/tea_shops").add({
+                    shopName: shopName,
+                    branchName: branchName,
+                    city: city,
+                    district: district,
+                    address: address,
+                    phone: phone,
+                    t: lat,
+                    g: lng
+                });
+            });
+    }
     res.status(200).send("Success");
 });
+
+// export const parseYiFangTeaData = functions.https.onRequest(async (req, res) => {
+//     const fetchCount = 20;
+//     const uid = req.query["uid"]; //Should be 46(North), 47(Middle), 48(South), 49(East)
+//     const index = req.query["index"];
+//     const parser = require('node-html-parser');
+//     const rp = require('request-promise');
+//     const yiFangTeaShopUrl = `http://www.yifangtea.com.tw/location.php?uID=${uid}`;
+//     await rp((yiFangTeaShopUrl)).then(async (html: string) => {
+//         const p = parser.parse(html);
+//         const allData: HTMLElement[] = p.querySelector("#intro").querySelector(".row").querySelector(".bg_2")
+//             .querySelector(".container").querySelector(".col-md-12").querySelectorAll(".col-sm-6");
+//         console.log("Total:" + allData.length);
+//         for (let i = index; i < allData.length; i++) {
+//             if (i > index + fetchCount - 1) {
+//                 break;
+//             }
+//             const element = allData[i];
+//             let branchName;
+//             let phone;
+//             let city;
+//             let district;
+//             let originalAddress: string = "";
+//             let address;
+//             let lat: string = "";
+//             let lng: string = "";
+//             const shopName = "一芳台灣水果茶";
+
+//             const locationDivTag = element.querySelector(".location_1").querySelector(".col-md-7").querySelector(".location_2");
+//             const h3Tag = locationDivTag.querySelector("h3");
+//             if (h3Tag !== null) {
+//                 branchName = h3Tag.rawText.replace("店", "").trim();
+//             }
+//             const ulTags = locationDivTag.querySelectorAll("ul");
+//             let liTag = ulTags[0].querySelector("li");
+//             if (liTag !== null) {
+//                 originalAddress = liTag.rawText.trim();
+//                 const splitAddr = parseAddress(originalAddress);
+//                 city = splitAddr[0];
+//                 district = splitAddr[1];
+//                 address = splitAddr[2];
+//             }
+//             liTag = ulTags[1].querySelector("li");
+//             if (liTag !== null) {
+//                 phone = liTag.rawText.trim();                
+//             }
+//             const pos = await geocodeAddress(`${city}${district}${address}`);
+//             if (pos !== null && pos.length === 2) {
+//                 lat = pos[0];
+//                 lng = pos[1];
+//             }
+
+//             if (!isNumberOnly(lat) || !isNumberOnly(lng)) {
+//                 console.log("branch: " + branchName + " 無法獲得");
+//                 continue;
+//             }
+//             // if (i < 0) {
+//             console.log(shopName + "," + branchName + "," + phone + "," + city + "," + district + "," + address);
+//             // }
+
+//             console.log("第" + (i + 1) + "個: " + branchName + ` Lat:` + lat + `, Lng:` + lng);
+//             await firestore.collection("/tea_shops").add({
+//                 shopName: shopName,
+//                 branchName: branchName,
+//                 city: city,
+//                 district: district,
+//                 address: address,
+//                 phone: phone,
+//                 t: lat,
+//                 g: lng
+//             });
+//         }
+//     });
+//     res.status(200).send("Success");
+// });
 
 // export const parseMrWishData = functions.https.onRequest(async (req, res) => {
 //     const fetchCount = 20;
